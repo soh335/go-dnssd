@@ -7,7 +7,14 @@ import (
 
 func main() {
         bc := make(chan *dnssd.BrowseReply)
-        go dnssd.Browse(dnssd.DNSServiceInterfaceIndexAny, "_http._tcp", bc)
+        ctx, berr := dnssd.Browse(dnssd.DNSServiceInterfaceIndexAny, "_http._tcp", bc)
+
+        if berr != nil {
+                fmt.Println(berr)
+                return
+        }
+
+        go dnssd.Process(ctx)
 
         for {
                 browseReply, ok := <-bc
@@ -20,7 +27,7 @@ func main() {
                 fmt.Println("start resolve")
 
                 rc := make(chan *dnssd.ResolveReply)
-                go dnssd.Resolve(
+                rctx, rerr := dnssd.Resolve(
                         dnssd.DNSServiceFlagsForceMulticast,
                         browseReply.InterfaceIndex,
                         browseReply.ServiceName,
@@ -29,11 +36,18 @@ func main() {
                         rc,
                 )
 
+                if rerr != nil {
+                        fmt.Println(rerr)
+                        return
+                }
+
+                go dnssd.Process(rctx)
+
                 resolveReply, _ := <-rc
                 fmt.Println(resolveReply)
 
                 qc := make(chan *dnssd.QueryRecordReply)
-                go dnssd.QueryRecord(
+                qctx, qerr := dnssd.QueryRecord(
                         dnssd.DNSServiceFlagsForceMulticast,
                         resolveReply.InterfaceIndex,
                         resolveReply.FullName,
@@ -42,18 +56,32 @@ func main() {
                         qc,
                 )
 
+                if qerr != nil {
+                        fmt.Println(qerr)
+                        return
+                }
+
+                go dnssd.Process(qctx)
+
                 queryRecordReply, _ := <-qc
                 fmt.Println(queryRecordReply)
                 fmt.Println(queryRecordReply.SRV())
 
                 gc := make(chan *dnssd.GetAddrInfoReply)
-                go dnssd.GetAddrInfo(
+                gctx, gerr := dnssd.GetAddrInfo(
                         dnssd.DNSServiceFlagsForceMulticast,
                         0,
                         dnssd.DNSServiceProtocol_IPv4,
                         resolveReply.HostTarget,
                         gc,
                 )
+
+                if gerr != nil {
+                        fmt.Println(gerr)
+                        return
+                }
+
+                go dnssd.Process(gctx)
 
                 getAddrInfoReply, _ := <-gc
                 fmt.Println(getAddrInfoReply)

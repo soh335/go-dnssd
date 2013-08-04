@@ -28,19 +28,13 @@ void BrowseReply
 
 DNSServiceErrorType Browse
 (
+    DNSServiceRef *ref,
     DNSServiceFlags flags,
     const char* regType,
     void *context
 )
 {
-    DNSServiceRef BrowseRef;
-    DNSServiceErrorType err = DNSServiceBrowse(&BrowseRef, 0, flags, regType, NULL, BrowseReply, context);
-
-    if ( err == kDNSServiceErr_NoError ) {
-        DNSServiceProcessResult(BrowseRef);
-        DNSServiceRefDeallocate(BrowseRef);
-    }
-
+    DNSServiceErrorType err = DNSServiceBrowse(ref, 0, flags, regType, NULL, BrowseReply, context);
     return err;
 }
 
@@ -71,6 +65,7 @@ void ResolveReply
 
 DNSServiceErrorType Resolve
 (
+    DNSServiceRef *ref,
     DNSServiceFlags flags,
     uint32_t interfaceIndex,
     const char *serviceName,
@@ -79,14 +74,7 @@ DNSServiceErrorType Resolve
     void *context
 )
 {
-    DNSServiceRef ResolveRef;
-    DNSServiceErrorType err = DNSServiceResolve(&ResolveRef, flags, interfaceIndex, serviceName, regType, replyDomain, ResolveReply, context);
-
-    if ( err == kDNSServiceErr_NoError ) {
-        DNSServiceProcessResult(ResolveRef);
-        DNSServiceRefDeallocate(ResolveRef);
-    }
-
+    DNSServiceErrorType err = DNSServiceResolve(ref, flags, interfaceIndex, serviceName, regType, replyDomain, ResolveReply, context);
     return err;
 }
 
@@ -119,6 +107,7 @@ void QueryRecordReply
 
 DNSServiceErrorType QueryRecord
 (
+    DNSServiceRef *ref,
     DNSServiceFlags flags,
     uint32_t interfaceIndex,
     const char *fullName,
@@ -127,14 +116,7 @@ DNSServiceErrorType QueryRecord
     void *context
 )
 {
-    DNSServiceRef QueryRecordRef;
-    DNSServiceErrorType err = DNSServiceQueryRecord(&QueryRecordRef, flags, interfaceIndex, fullName, rrtype, rrclass, QueryRecordReply, context);
-
-    if ( err == kDNSServiceErr_NoError ) {
-        DNSServiceProcessResult(QueryRecordRef);
-        DNSServiceRefDeallocate(QueryRecordRef);
-    }
-
+    DNSServiceErrorType err = DNSServiceQueryRecord(ref, flags, interfaceIndex, fullName, rrtype, rrclass, QueryRecordReply, context);
     return err;
 }
 
@@ -173,6 +155,7 @@ void GetAddrInfoReply
 
 DNSServiceErrorType GetAddrInfo
 (
+    DNSServiceRef *ref,
     DNSServiceFlags flags,
     uint32_t interfaceIndex,
     DNSServiceProtocol protocol,
@@ -180,13 +163,6 @@ DNSServiceErrorType GetAddrInfo
     void *context
 )
 {
-    DNSServiceRef GetAddrInfoRef;
-    DNSServiceErrorType err = DNSServiceGetAddrInfo(&GetAddrInfoRef, flags, interfaceIndex, protocol, hostName, GetAddrInfoReply, context);
-
-    if ( err == kDNSServiceErr_NoError ) {
-        DNSServiceProcessResult(GetAddrInfoRef);
-        DNSServiceRefDeallocate(GetAddrInfoRef);
-    }
-
+    DNSServiceErrorType err = DNSServiceGetAddrInfo(ref, flags, interfaceIndex, protocol, hostName, GetAddrInfoReply, context);
     return err;
 }

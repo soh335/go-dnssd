@@ -3,10 +3,10 @@ package dnssd
 /*
 #include <stdlib.h>
 #include "dns_sd.h"
-DNSServiceErrorType Browse(DNSServiceFlags, const char *, void *);
-DNSServiceErrorType Resolve(DNSServiceFlags, uint32_t, const char *, const char *, const char *, void *);
-DNSServiceErrorType QueryRecord(DNSServiceFlags, uint32_t, const char *, uint16_t, uint16_t, void *);
-DNSServiceErrorType GetAddrInfo(DNSServiceFlags, uint32_t, DNSServiceProtocol, const char *, void *);
+DNSServiceErrorType Browse(DNSServiceRef *, DNSServiceFlags, const char *, void *);
+DNSServiceErrorType Resolve(DNSServiceRef *, DNSServiceFlags, uint32_t, const char *, const char *, const char *, void *);
+DNSServiceErrorType QueryRecord(DNSServiceRef *, DNSServiceFlags, uint32_t, const char *, uint16_t, uint16_t, void *);
+DNSServiceErrorType GetAddrInfo(DNSServiceRef *, DNSServiceFlags, uint32_t, DNSServiceProtocol, const char *, void *);
 */
 import "C"
 
@@ -15,7 +15,13 @@ import (
         "bytes"
         "encoding/binary"
         "strings"
+        "reflect"
 )
+
+type Context struct {
+        ref *C.DNSServiceRef
+        c reflect.Value
+}
 
 type BrowseReply struct {
         InterfaceIndex uint32
@@ -59,6 +65,12 @@ type GetAddrInfoReply struct {
 func init() {
 }
 
+func Process(ctx *Context) {
+        C.DNSServiceProcessResult(*(ctx.ref))
+        C.DNSServiceRefDeallocate(*(ctx.ref))
+        ctx.c.Close()
+}
+
 //export goBrowseReply
 func goBrowseReply( interfaceIndex uint32, serviceName *C.char, regType *C.char, replyDomain *C.char, contextpt unsafe.Pointer) {
         br := &BrowseReply{ interfaceIndex, C.GoString(serviceName), C.GoString(regType), C.GoString(replyDomain) }
@@ -66,7 +78,7 @@ func goBrowseReply( interfaceIndex uint32, serviceName *C.char, regType *C.char,
         fn(br)
 }
 
-func Browse(flags C.DNSServiceFlags, regType string, c chan *BrowseReply) error {
+func Browse(flags C.DNSServiceFlags, regType string, c chan *BrowseReply) (*Context, error) {
 
         var fn = func(browseReply *BrowseReply) {
                 c <- browseReply
@@ -76,10 +88,14 @@ func Browse(flags C.DNSServiceFlags, regType string, c chan *BrowseReply) error 
         cregType := C.CString(regType)
         defer C.free(unsafe.Pointer(cregType))
 
-        cerr := C.Browse(flags, cregType, (*(*unsafe.Pointer)(fnptr)))
-        close(c)
+        var ref C.DNSServiceRef
+        cerr := C.Browse(&ref, flags, cregType, (*(*unsafe.Pointer)(fnptr)))
 
-        return createErr(cerr)
+        if cerr == DNSServiceErr_NoError {
+                return &Context{&ref, reflect.ValueOf(c)}, nil
+        }
+
+        return nil, createErr(cerr)
 }
 
 //export goResolveReply
@@ -112,12 +128,13 @@ func goResolveReply( interfaceIndex uint32, fullName *C.char, hostTarget *C.char
         fn(rr)
 }
 
-func Resolve(flags C.DNSServiceFlags, interfaceIndex uint32, serviceName string, regType string, replyDomain string, c chan *ResolveReply) error {
+func Resolve(flags C.DNSServiceFlags, interfaceIndex uint32, serviceName string, regType string, replyDomain string, c chan *ResolveReply) (*Context, error) {
         var fn = func(resolveReply *ResolveReply) {
                 c <- resolveReply
         }
         var fnptr = unsafe.Pointer(&fn)
 
+        var ref C.DNSServiceRef
         cserviceName := C.CString(serviceName)
         cregType     := C.CString(regType)
         creplyDomain := C.CString(replyDomain)
@@ -127,6 +144,7 @@ func Resolve(flags C.DNSServiceFlags, interfaceIndex uint32, serviceName string,
         defer C.free(unsafe.Pointer(creplyDomain))
 
         cerr := C.Resolve(
+                &ref,
                 flags,
                 (C.uint32_t)(interfaceIndex),
                 cserviceName,
@@ -135,7 +153,11 @@ func Resolve(flags C.DNSServiceFlags, interfaceIndex uint32, serviceName string,
                 (*(*unsafe.Pointer)(fnptr)),
         )
 
-        return createErr(cerr)
+        if cerr == DNSServiceErr_NoError {
+                return &Context{&ref, reflect.ValueOf(c)}, nil
+        }
+
+        return nil, createErr(cerr)
 }
 
 //export goQueryRecordReply
@@ -145,19 +167,20 @@ func goQueryRecordReply(interfaceIndex uint32, fullName *C.char, rrtype uint16, 
         fn(qrr)
 }
 
-func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string, rrtype C.uint16_t, rrclass C.uint16_t, c chan *QueryRecordReply) error {
+func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string, rrtype C.uint16_t, rrclass C.uint16_t, c chan *QueryRecordReply) (*Context, error) {
 
         var fn = func(queryRecordReply *QueryRecordReply) {
                 c <- queryRecordReply
-                close(c)
         }
         var fnptr = unsafe.Pointer(&fn)
 
+        var ref C.DNSServiceRef
         cfullName := C.CString(fullName)
 
         defer C.free(unsafe.Pointer(cfullName))
 
         cerr := C.QueryRecord(
+                &ref,
                 flags,
                 (C.uint32_t)(interfaceIndex),
                 cfullName,
@@ -166,7 +189,11 @@ func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string
                 (*(*unsafe.Pointer)(fnptr)),
         )
 
-        return createErr(cerr)
+        if cerr == DNSServiceErr_NoError {
+                return &Context{&ref, reflect.ValueOf(c)}, nil
+        }
+
+        return nil, createErr(cerr)
 }
 
 //export goGetAddrInfoReply
@@ -176,18 +203,19 @@ func goGetAddrInfoReply(interfaceIndex uint32, hostName *C.char, ip *C.char, ttl
         fn(gair)
 }
 
-func GetAddrInfo(flags C.DNSServiceFlags, interfaceIndex uint32, protocol C.DNSServiceProtocol, hostName string, c chan *GetAddrInfoReply) error {
+func GetAddrInfo(flags C.DNSServiceFlags, interfaceIndex uint32, protocol C.DNSServiceProtocol, hostName string, c chan *GetAddrInfoReply) (*Context, error) {
         var fn = func(getAddrInfoReply *GetAddrInfoReply) {
                 c <- getAddrInfoReply
-                close(c)
         }
         var fnptr = unsafe.Pointer(&fn)
 
+        var ref C.DNSServiceRef
         chostName := C.CString(hostName)
 
         defer C.free(unsafe.Pointer(chostName))
 
         cerr := C.GetAddrInfo(
+                &ref,
                 flags,
                 (C.uint32_t)(interfaceIndex),
                 protocol,
@@ -195,7 +223,11 @@ func GetAddrInfo(flags C.DNSServiceFlags, interfaceIndex uint32, protocol C.DNSS
                 (*(*unsafe.Pointer)(fnptr)),
         )
 
-        return createErr(cerr)
+        if cerr == DNSServiceErr_NoError {
+                return &Context{&ref, reflect.ValueOf(c)}, nil
+        }
+
+        return nil, createErr(cerr)
 }
 
 func (qrr *QueryRecordReply) SRV() (*RecordSRV) {

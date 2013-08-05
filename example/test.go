@@ -7,10 +7,10 @@ import (
 
 func main() {
         bc := make(chan *dnssd.BrowseReply)
-        ctx, berr := dnssd.Browse(dnssd.DNSServiceInterfaceIndexAny, "_http._tcp", bc)
+        ctx, err := dnssd.Browse(dnssd.DNSServiceInterfaceIndexAny, "_http._tcp", bc)
 
-        if berr != nil {
-                fmt.Println(berr)
+        if err != nil {
+                fmt.Println(err)
                 return
         }
 
@@ -27,7 +27,7 @@ func main() {
                 fmt.Println("start resolve")
 
                 rc := make(chan *dnssd.ResolveReply)
-                rctx, rerr := dnssd.Resolve(
+                rctx, err := dnssd.Resolve(
                         dnssd.DNSServiceFlagsForceMulticast,
                         browseReply.InterfaceIndex,
                         browseReply.ServiceName,
@@ -36,8 +36,8 @@ func main() {
                         rc,
                 )
 
-                if rerr != nil {
-                        fmt.Println(rerr)
+                if err != nil {
+                        fmt.Println(err)
                         return
                 }
 
@@ -47,7 +47,7 @@ func main() {
                 fmt.Println(resolveReply)
 
                 qc := make(chan *dnssd.QueryRecordReply)
-                qctx, qerr := dnssd.QueryRecord(
+                qctx, err := dnssd.QueryRecord(
                         dnssd.DNSServiceFlagsForceMulticast,
                         resolveReply.InterfaceIndex,
                         resolveReply.FullName,
@@ -56,8 +56,8 @@ func main() {
                         qc,
                 )
 
-                if qerr != nil {
-                        fmt.Println(qerr)
+                if err != nil {
+                        fmt.Println(err)
                         return
                 }
 
@@ -68,7 +68,7 @@ func main() {
                 fmt.Println(queryRecordReply.SRV())
 
                 gc := make(chan *dnssd.GetAddrInfoReply)
-                gctx, gerr := dnssd.GetAddrInfo(
+                gctx, err := dnssd.GetAddrInfo(
                         dnssd.DNSServiceFlagsForceMulticast,
                         0,
                         dnssd.DNSServiceProtocol_IPv4,
@@ -76,8 +76,8 @@ func main() {
                         gc,
                 )
 
-                if gerr != nil {
-                        fmt.Println(gerr)
+                if err != nil {
+                        fmt.Println(err)
                         return
                 }
 

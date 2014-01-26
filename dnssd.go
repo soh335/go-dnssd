@@ -210,8 +210,7 @@ func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string
 	return nil, createErr(cerr)
 }
 
-// Note: txtRecord unsafe.Pointer is missing right now b/c I didn't need it and didn't want to figure out how to implement it.
-func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string, regType string, domain string, host string, port uint16, c chan *RegisterReply) (*Context, error){
+func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string, regType string, domain string, host string, port uint16, txtRecords map[string] string, c chan *RegisterReply) (*Context, error){
 	var fn = func(registerReply *RegisterReply) {
 		c <- registerReply
 	}
@@ -228,6 +227,34 @@ func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string
 	defer C.free(unsafe.Pointer(c_domain))
 	defer C.free(unsafe.Pointer(c_host))
 
+	// Setup text record
+	var txtRecordRef C.TXTRecordRef
+	C.TXTRecordCreate(
+		&txtRecordRef,
+		0,   // let the c library manage it's own buffer
+		nil,
+	)
+
+	// Add text records
+	for key, value := range txtRecords {
+		c_key   := C.CString(key)
+		c_value := C.CString(value)
+
+		defer C.free(unsafe.Pointer(c_key))
+		defer C.free(unsafe.Pointer(c_value))
+
+		txtadderr := C.TXTRecordSetValue(
+			&txtRecordRef,
+			c_key,
+			(C.uint8_t)(len(value)),
+			unsafe.Pointer(c_value),
+		)
+
+		if txtadderr != DNSServiceErr_NoError {
+			return nil, createErr(txtadderr)
+		}
+	}
+
 	cerr := C.ServiceRegister(
 		&ref,
 		flags,
@@ -237,8 +264,8 @@ func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string
 		c_domain,
 		c_host,
 		(C.uint16_t)(port),
-		(C.uint16_t)(0),
-		nil,
+		C.TXTRecordGetLength(&txtRecordRef),
+		C.TXTRecordGetBytesPtr(&txtRecordRef),
 		(*(*unsafe.Pointer)(fnptr)),
 	)
 

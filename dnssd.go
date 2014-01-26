@@ -211,6 +211,7 @@ func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string
 }
 
 func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string, regType string, domain string, host string, port uint16, txtRecords map[string] string, c chan *RegisterReply) (*Context, error){
+
 	var fn = func(registerReply *RegisterReply) {
 		c <- registerReply
 	}

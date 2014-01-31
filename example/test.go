@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/dapplebeforedawn/go-dnssd"
+	"github.com/soh335/go-dnssd"
 )
 
 func main() {

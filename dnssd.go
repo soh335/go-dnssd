@@ -6,6 +6,7 @@ package dnssd
 DNSServiceErrorType Browse(DNSServiceRef *, DNSServiceFlags, const char *, void *);
 DNSServiceErrorType Resolve(DNSServiceRef *, DNSServiceFlags, uint32_t, const char *, const char *, const char *, void *);
 DNSServiceErrorType QueryRecord(DNSServiceRef *, DNSServiceFlags, uint32_t, const char *, uint16_t, uint16_t, void *);
+DNSServiceErrorType ServiceRegister(DNSServiceRef *, DNSServiceFlags, uint32_t, const char *, const char *, const char *, const char *, uint16_t, uint16_t, const void *, void*);
 DNSServiceErrorType GetAddrInfo(DNSServiceRef *, DNSServiceFlags, uint32_t, DNSServiceProtocol, const char *, void *);
 */
 import "C"
@@ -20,7 +21,7 @@ import (
 
 type Context struct {
 	ref *C.DNSServiceRef
-	c   reflect.Value
+	c reflect.Value
 }
 
 type BrowseReply struct {
@@ -46,6 +47,12 @@ type QueryRecordReply struct {
 	Rdlen          uint16
 	Rdata          []byte
 	Ttl            uint32
+}
+
+type RegisterReply struct {
+	Name     string
+	RegType  string
+	Domain   string
 }
 
 type RecordSRV struct {
@@ -170,6 +177,13 @@ func goQueryRecordReply(interfaceIndex uint32, fullName *C.char, rrtype uint16, 
 	fn(qrr)
 }
 
+//export goServiceRegisterReply
+func goServiceRegisterReply(name *C.char, regType *C.char, domain *C.char, contextpt unsafe.Pointer) {
+	srr := &RegisterReply{C.GoString(name), C.GoString(regType), C.GoString(domain) }
+	fn := (*(*func(*RegisterReply))(unsafe.Pointer(&contextpt)))
+	fn(srr)
+}
+
 func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string, rrtype C.uint16_t, rrclass C.uint16_t, c chan *QueryRecordReply) (*Context, error) {
 
 	var fn = func(queryRecordReply *QueryRecordReply) {
@@ -189,6 +203,73 @@ func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string
 		cfullName,
 		rrtype,
 		rrclass,
+		(*(*unsafe.Pointer)(fnptr)),
+	)
+
+	if cerr == DNSServiceErr_NoError {
+		return &Context{&ref, reflect.ValueOf(c)}, nil
+	}
+
+	return nil, createErr(cerr)
+}
+
+func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string, regType string, domain string, host string, port uint16, txtRecords map[string] string, c chan *RegisterReply) (*Context, error){
+
+	var fn = func(registerReply *RegisterReply) {
+		c <- registerReply
+	}
+	var fnptr = unsafe.Pointer(&fn)
+
+	var ref C.DNSServiceRef
+	c_name    := C.CString(name)
+	c_regType := C.CString(regType)
+	c_domain  := C.CString(domain)
+	c_host    := C.CString(host)
+
+	defer C.free(unsafe.Pointer(c_name))
+	defer C.free(unsafe.Pointer(c_regType))
+	defer C.free(unsafe.Pointer(c_domain))
+	defer C.free(unsafe.Pointer(c_host))
+
+	// Setup text record
+	var txtRecordRef C.TXTRecordRef
+	C.TXTRecordCreate(
+		&txtRecordRef,
+		0,   // let the c library manage it's own buffer
+		nil,
+	)
+
+	// Add text records
+	for key, value := range txtRecords {
+		c_key   := C.CString(key)
+		c_value := C.CString(value)
+
+		defer C.free(unsafe.Pointer(c_key))
+		defer C.free(unsafe.Pointer(c_value))
+
+		txtadderr := C.TXTRecordSetValue(
+			&txtRecordRef,
+			c_key,
+			(C.uint8_t)(len(value)),
+			unsafe.Pointer(c_value),
+		)
+
+		if txtadderr != DNSServiceErr_NoError {
+			return nil, createErr(txtadderr)
+		}
+	}
+
+	cerr := C.ServiceRegister(
+		&ref,
+		flags,
+		(C.uint32_t)(interfaceIndex),
+		c_name,
+		c_regType,
+		c_domain,
+		c_host,
+		(C.uint16_t)(port),
+		C.TXTRecordGetLength(&txtRecordRef),
+		C.TXTRecordGetBytesPtr(&txtRecordRef),
 		(*(*unsafe.Pointer)(fnptr)),
 	)
 

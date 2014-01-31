@@ -2,10 +2,48 @@ package main
 
 import (
 	"fmt"
-	"github.com/soh335/go-dnssd"
+	"github.com/dapplebeforedawn/go-dnssd"
 )
 
 func main() {
+	ctx, err := RegisterService()
+	if err != nil{
+		panic(err)
+	}
+	defer ctx.Release()
+	Discover()
+}
+
+func RegisterService() (*dnssd.Context, error) {
+	txtRecords := map[string]string{
+		"path": "/path-to-page.html",
+	}
+
+	rc := make(chan *dnssd.RegisterReply)
+	ctx, err := dnssd.ServiceRegister(
+		dnssd.DNSServiceFlagsSuppressUnusable,
+		0,                // most applications will pass 0
+		"My Server",
+		"_http._tcp.",
+		"",               // empty string ends up as local domain
+		"",               // most applications do not specify a host
+		3000,             // port the service is running on
+		txtRecords,
+		rc,
+	)
+
+	go dnssd.Process(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	registerReply, _ := <-rc
+	fmt.Println("Register Reply: ", registerReply)
+	return ctx, nil
+}
+
+func Discover() {
 	bc := make(chan *dnssd.BrowseReply)
 	ctx, err := dnssd.Browse(dnssd.DNSServiceInterfaceIndexAny, "_http._tcp", bc)
 

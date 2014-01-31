@@ -105,6 +105,25 @@ void QueryRecordReply
     );
 }
 
+void RegisterReply
+(
+    DNSServiceRef        sdRef,
+    DNSServiceFlags      flags,
+    DNSServiceErrorType  errorCode,
+    const char           *name,
+    const char           *regType,
+    const char           *domain,
+    void                 *context
+)
+{
+    goServiceRegisterReply(
+        (char *)name,
+        (char *)regType,
+        (char *)domain,
+        context
+    );
+}
+
 DNSServiceErrorType QueryRecord
 (
     DNSServiceRef *ref,
@@ -117,6 +136,25 @@ DNSServiceErrorType QueryRecord
 )
 {
     DNSServiceErrorType err = DNSServiceQueryRecord(ref, flags, interfaceIndex, fullName, rrtype, rrclass, QueryRecordReply, context);
+    return err;
+}
+
+DNSServiceErrorType ServiceRegister
+(
+    DNSServiceRef    *ref,
+    DNSServiceFlags  flags,
+    uint32_t         interfaceIndex,
+    const char       *name,       /* may be NULL */
+    const char       *regType,
+    const char       *domain,     /* may be NULL */
+    const char       *host,       /* may be NULL */
+    uint16_t         port,        /* In network byte order */
+    uint16_t         txtLen,
+    const void       *txtRecord,  /* may be NULL */
+    void             *context     /* may be NULL */
+)
+{
+    DNSServiceErrorType err = DNSServiceRegister(ref, flags, interfaceIndex, name, regType, domain, host, port, txtLen, txtRecord, RegisterReply, context);
     return err;
 }
 

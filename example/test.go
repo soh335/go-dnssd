@@ -32,11 +32,11 @@ func RegisterService() (*dnssd.Context, error) {
 		rc,
 	)
 
-	go dnssd.Process(ctx)
-
 	if err != nil {
 		return nil, err
 	}
+
+	go dnssd.Process(ctx)
 
 	registerReply, _ := <-rc
 	fmt.Println("Register Reply: ", registerReply)

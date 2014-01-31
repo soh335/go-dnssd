@@ -21,7 +21,7 @@ import (
 
 type Context struct {
 	ref *C.DNSServiceRef
-	c reflect.Value
+	c   reflect.Value
 }
 
 type BrowseReply struct {
@@ -50,9 +50,9 @@ type QueryRecordReply struct {
 }
 
 type RegisterReply struct {
-	Name     string
-	RegType  string
-	Domain   string
+	Name    string
+	RegType string
+	Domain  string
 }
 
 type RecordSRV struct {
@@ -179,7 +179,7 @@ func goQueryRecordReply(interfaceIndex uint32, fullName *C.char, rrtype uint16, 
 
 //export goServiceRegisterReply
 func goServiceRegisterReply(name *C.char, regType *C.char, domain *C.char, contextpt unsafe.Pointer) {
-	srr := &RegisterReply{C.GoString(name), C.GoString(regType), C.GoString(domain) }
+	srr := &RegisterReply{C.GoString(name), C.GoString(regType), C.GoString(domain)}
 	fn := (*(*func(*RegisterReply))(unsafe.Pointer(&contextpt)))
 	fn(srr)
 }
@@ -213,7 +213,7 @@ func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string
 	return nil, createErr(cerr)
 }
 
-func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string, regType string, domain string, host string, port uint16, txtRecords map[string] string, c chan *RegisterReply) (*Context, error){
+func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string, regType string, domain string, host string, port uint16, txtRecords map[string]string, c chan *RegisterReply) (*Context, error) {
 
 	var fn = func(registerReply *RegisterReply) {
 		c <- registerReply
@@ -221,10 +221,10 @@ func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string
 	var fnptr = unsafe.Pointer(&fn)
 
 	var ref C.DNSServiceRef
-	c_name    := C.CString(name)
+	c_name := C.CString(name)
 	c_regType := C.CString(regType)
-	c_domain  := C.CString(domain)
-	c_host    := C.CString(host)
+	c_domain := C.CString(domain)
+	c_host := C.CString(host)
 
 	defer C.free(unsafe.Pointer(c_name))
 	defer C.free(unsafe.Pointer(c_regType))
@@ -235,13 +235,13 @@ func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string
 	var txtRecordRef C.TXTRecordRef
 	C.TXTRecordCreate(
 		&txtRecordRef,
-		0,   // let the c library manage it's own buffer
+		0, // let the c library manage it's own buffer
 		nil,
 	)
 
 	// Add text records
 	for key, value := range txtRecords {
-		c_key   := C.CString(key)
+		c_key := C.CString(key)
 		c_value := C.CString(value)
 
 		defer C.free(unsafe.Pointer(c_key))

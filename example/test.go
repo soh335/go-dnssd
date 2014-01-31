@@ -7,7 +7,7 @@ import (
 
 func main() {
 	ctx, err := RegisterService()
-	if err != nil{
+	if err != nil {
 		panic(err)
 	}
 	defer ctx.Release()
@@ -22,12 +22,12 @@ func RegisterService() (*dnssd.Context, error) {
 	rc := make(chan *dnssd.RegisterReply)
 	ctx, err := dnssd.ServiceRegister(
 		dnssd.DNSServiceFlagsSuppressUnusable,
-		0,                // most applications will pass 0
+		0, // most applications will pass 0
 		"My Server",
 		"_http._tcp.",
-		"",               // empty string ends up as local domain
-		"",               // most applications do not specify a host
-		3000,             // port the service is running on
+		"",   // empty string ends up as local domain
+		"",   // most applications do not specify a host
+		3000, // port the service is running on
 		txtRecords,
 		rc,
 	)

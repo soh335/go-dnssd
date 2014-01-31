@@ -6,17 +6,21 @@ import (
 )
 
 func main() {
-	go RegisterService()
+	ctx, err := RegisterService()
+	if err != nil{
+		panic(err)
+	}
+	defer ctx.Release()
 	Discover()
 }
 
-func RegisterService() {
+func RegisterService() (*dnssd.Context, error) {
 	txtRecords := map[string]string{
 		"path": "/path-to-page.html",
 	}
 
 	rc := make(chan *dnssd.RegisterReply)
-	_, err := dnssd.ServiceRegister(
+	ctx, err := dnssd.ServiceRegister(
 		dnssd.DNSServiceFlagsSuppressUnusable,
 		0,                // most applications will pass 0
 		"My Server",
@@ -28,13 +32,15 @@ func RegisterService() {
 		rc,
 	)
 
+	go dnssd.Process(ctx)
+
 	if err != nil {
-		fmt.Println(err)
-		return
+		return nil, err
 	}
 
 	registerReply, _ := <-rc
 	fmt.Println("Register Reply: ", registerReply)
+	return ctx, nil
 }
 
 func Discover() {

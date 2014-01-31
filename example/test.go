@@ -46,6 +46,7 @@ func Discover() {
 		return
 	}
 
+	defer ctx.Release()
 	go dnssd.Process(ctx)
 
 	for {
@@ -73,6 +74,7 @@ func Discover() {
 			return
 		}
 
+		defer rctx.Release()
 		go dnssd.Process(rctx)
 
 		resolveReply, _ := <-rc
@@ -93,6 +95,7 @@ func Discover() {
 			return
 		}
 
+		defer qctx.Release()
 		go dnssd.Process(qctx)
 
 		queryRecordReply, _ := <-qc
@@ -113,6 +116,7 @@ func Discover() {
 			return
 		}
 
+		defer gctx.Release()
 		go dnssd.Process(gctx)
 
 		getAddrInfoReply, _ := <-gc

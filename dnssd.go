@@ -74,8 +74,11 @@ func init() {
 
 func Process(ctx *Context) {
 	C.DNSServiceProcessResult(*(ctx.ref))
-	C.DNSServiceRefDeallocate(*(ctx.ref))
 	ctx.c.Close()
+}
+
+func (ctx *Context) Release() {
+	C.DNSServiceRefDeallocate(*(ctx.ref))
 }
 
 //export goBrowseReply

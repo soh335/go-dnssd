@@ -130,8 +130,8 @@ func goResolveReply(interfaceIndex uint32, fullName *C.char, hostTarget *C.char,
 		)
 
 		byteValue := C.GoBytes(value, C.int(valueLen))
-		goKey := C.GoString((*C.char)(unsafe.Pointer(&key[0])))
-		txtRecordMap[goKey] = string(byteValue)
+		keyString := string(bytes.Trim(key, string(0)))
+		txtRecordMap[keyString] = string(byteValue)
 	}
 
 	rr := &ResolveReply{interfaceIndex, C.GoString(fullName), C.GoString(hostTarget), port, txtRecordMap}

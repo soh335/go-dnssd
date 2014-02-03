@@ -119,6 +119,8 @@ func goResolveReply(interfaceIndex uint32, fullName *C.char, hostTarget *C.char,
 		var valueLen C.uint8_t
 		var value unsafe.Pointer
 
+		// [cgo] How to convert Go type []byte to C type *_Ctype_char?
+		// https://groups.google.com/forum/#!topic/golang-nuts/f1sWP3-YbuI
 		C.TXTRecordGetItemAtIndex(
 			(C.uint16_t)(txtLen),
 			txtRecords,
@@ -130,6 +132,8 @@ func goResolveReply(interfaceIndex uint32, fullName *C.char, hostTarget *C.char,
 		)
 
 		byteValue := C.GoBytes(value, C.int(valueLen))
+		// How Can I Remove the ZEROS in a String?
+		// https://groups.google.com/forum/#!topic/golang-nuts/JuLPI4nCsOo
 		keyString := string(bytes.Trim(key, string(0)))
 		txtRecordMap[keyString] = string(byteValue)
 	}

@@ -56,7 +56,7 @@ void ResolveReply
         interfaceIndex,
         (char *)fullName,
         (char *)hostTarget,
-        port,
+        ntohs(port),
         txtLen,
         (void *)txtRecords,
         context

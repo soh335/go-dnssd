@@ -154,7 +154,7 @@ DNSServiceErrorType ServiceRegister
     void             *context     /* may be NULL */
 )
 {
-    DNSServiceErrorType err = DNSServiceRegister(ref, flags, interfaceIndex, name, regType, domain, host, port, txtLen, txtRecord, RegisterReply, context);
+    DNSServiceErrorType err = DNSServiceRegister(ref, flags, interfaceIndex, name, regType, domain, host, htons(port), txtLen, txtRecord, RegisterReply, context);
     return err;
 }
 

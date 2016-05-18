@@ -16,12 +16,40 @@ import (
 	"encoding/binary"
 	"reflect"
 	"strings"
+	"sync"
 	"unsafe"
 )
 
+var (
+	callbacks      = map[uintptr]interface{}{}
+	mx             sync.Mutex
+	callbackOffset uintptr = 0
+)
+
+func storeCallback(cb interface{}) uintptr {
+	mx.Lock()
+	defer mx.Unlock()
+	callbackOffset += 1
+	callbacks[callbackOffset] = cb
+	return callbackOffset
+}
+
+func restoreCallback(i uintptr) interface{} {
+	mx.Lock()
+	defer mx.Unlock()
+	return callbacks[i]
+}
+
+func deleteCallback(i uintptr) {
+	mx.Lock()
+	defer mx.Unlock()
+	delete(callbacks, i)
+}
+
 type Context struct {
-	ref *C.DNSServiceRef
-	c   reflect.Value
+	ref           *C.DNSServiceRef
+	c             reflect.Value
+	callbackIndex uintptr
 }
 
 type BrowseReply struct {
@@ -79,12 +107,13 @@ func Process(ctx *Context) {
 
 func (ctx *Context) Release() {
 	C.DNSServiceRefDeallocate(*(ctx.ref))
+	deleteCallback(ctx.callbackIndex)
 }
 
 //export goBrowseReply
 func goBrowseReply(interfaceIndex uint32, serviceName *C.char, regType *C.char, replyDomain *C.char, contextpt unsafe.Pointer) {
 	br := &BrowseReply{interfaceIndex, C.GoString(serviceName), C.GoString(regType), C.GoString(replyDomain)}
-	fn := (*(*func(*BrowseReply))(unsafe.Pointer(&contextpt)))
+	fn := restoreCallback(uintptr(contextpt)).(func(*BrowseReply))
 	fn(br)
 }
 
@@ -93,16 +122,17 @@ func Browse(flags C.DNSServiceFlags, regType string, c chan *BrowseReply) (*Cont
 	var fn = func(browseReply *BrowseReply) {
 		c <- browseReply
 	}
-	var fnptr = unsafe.Pointer(&fn)
+	callbackIndex := storeCallback(fn)
+	var fnptr = unsafe.Pointer(callbackIndex)
 
 	cregType := C.CString(regType)
 	defer C.free(unsafe.Pointer(cregType))
 
 	var ref C.DNSServiceRef
-	cerr := C.Browse(&ref, flags, cregType, (*(*unsafe.Pointer)(fnptr)))
+	cerr := C.Browse(&ref, flags, cregType, fnptr)
 
 	if cerr == DNSServiceErr_NoError {
-		return &Context{&ref, reflect.ValueOf(c)}, nil
+		return &Context{&ref, reflect.ValueOf(c), callbackIndex}, nil
 	}
 
 	return nil, createErr(cerr)
@@ -139,7 +169,7 @@ func goResolveReply(interfaceIndex uint32, fullName *C.char, hostTarget *C.char,
 	}
 
 	rr := &ResolveReply{interfaceIndex, C.GoString(fullName), C.GoString(hostTarget), port, txtRecordMap}
-	fn := (*(*func(*ResolveReply))(unsafe.Pointer(&contextpt)))
+	fn := restoreCallback(uintptr(contextpt)).(func(*ResolveReply))
 	fn(rr)
 }
 
@@ -147,7 +177,8 @@ func Resolve(flags C.DNSServiceFlags, interfaceIndex uint32, serviceName string,
 	var fn = func(resolveReply *ResolveReply) {
 		c <- resolveReply
 	}
-	var fnptr = unsafe.Pointer(&fn)
+	callbackIndex := storeCallback(fn)
+	var fnptr = unsafe.Pointer(callbackIndex)
 
 	var ref C.DNSServiceRef
 	cserviceName := C.CString(serviceName)
@@ -165,11 +196,11 @@ func Resolve(flags C.DNSServiceFlags, interfaceIndex uint32, serviceName string,
 		cserviceName,
 		cregType,
 		creplyDomain,
-		(*(*unsafe.Pointer)(fnptr)),
+		fnptr,
 	)
 
 	if cerr == DNSServiceErr_NoError {
-		return &Context{&ref, reflect.ValueOf(c)}, nil
+		return &Context{&ref, reflect.ValueOf(c), callbackIndex}, nil
 	}
 
 	return nil, createErr(cerr)
@@ -178,14 +209,14 @@ func Resolve(flags C.DNSServiceFlags, interfaceIndex uint32, serviceName string,
 //export goQueryRecordReply
 func goQueryRecordReply(interfaceIndex uint32, fullName *C.char, rrtype uint16, rrclass uint16, rdlen uint16, rdata unsafe.Pointer, ttl uint32, contextpt unsafe.Pointer) {
 	qrr := &QueryRecordReply{interfaceIndex, C.GoString(fullName), rrtype, rrclass, rdlen, C.GoBytes(rdata, C.int(rdlen)), ttl}
-	fn := (*(*func(*QueryRecordReply))(unsafe.Pointer(&contextpt)))
+	fn := restoreCallback(uintptr(contextpt)).(func(*QueryRecordReply))
 	fn(qrr)
 }
 
 //export goServiceRegisterReply
 func goServiceRegisterReply(name *C.char, regType *C.char, domain *C.char, contextpt unsafe.Pointer) {
 	srr := &RegisterReply{C.GoString(name), C.GoString(regType), C.GoString(domain)}
-	fn := (*(*func(*RegisterReply))(unsafe.Pointer(&contextpt)))
+	fn := restoreCallback(uintptr(contextpt)).(func(*RegisterReply))
 	fn(srr)
 }
 
@@ -194,7 +225,8 @@ func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string
 	var fn = func(queryRecordReply *QueryRecordReply) {
 		c <- queryRecordReply
 	}
-	var fnptr = unsafe.Pointer(&fn)
+	callbackIndex := storeCallback(fn)
+	var fnptr = unsafe.Pointer(callbackIndex)
 
 	var ref C.DNSServiceRef
 	cfullName := C.CString(fullName)
@@ -208,11 +240,11 @@ func QueryRecord(flags C.DNSServiceFlags, interfaceIndex uint32, fullName string
 		cfullName,
 		rrtype,
 		rrclass,
-		(*(*unsafe.Pointer)(fnptr)),
+		fnptr,
 	)
 
 	if cerr == DNSServiceErr_NoError {
-		return &Context{&ref, reflect.ValueOf(c)}, nil
+		return &Context{&ref, reflect.ValueOf(c), callbackIndex}, nil
 	}
 
 	return nil, createErr(cerr)
@@ -223,7 +255,8 @@ func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string
 	var fn = func(registerReply *RegisterReply) {
 		c <- registerReply
 	}
-	var fnptr = unsafe.Pointer(&fn)
+	callbackIndex := storeCallback(fn)
+	var fnptr = unsafe.Pointer(callbackIndex)
 
 	var ref C.DNSServiceRef
 	c_name := C.CString(name)
@@ -275,11 +308,11 @@ func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string
 		(C.uint16_t)(port),
 		C.TXTRecordGetLength(&txtRecordRef),
 		C.TXTRecordGetBytesPtr(&txtRecordRef),
-		(*(*unsafe.Pointer)(fnptr)),
+		fnptr,
 	)
 
 	if cerr == DNSServiceErr_NoError {
-		return &Context{&ref, reflect.ValueOf(c)}, nil
+		return &Context{&ref, reflect.ValueOf(c), callbackIndex}, nil
 	}
 
 	return nil, createErr(cerr)
@@ -288,7 +321,7 @@ func ServiceRegister(flags C.DNSServiceFlags, interfaceIndex uint32, name string
 //export goGetAddrInfoReply
 func goGetAddrInfoReply(interfaceIndex uint32, hostName *C.char, ip *C.char, ttl uint32, contextpt unsafe.Pointer) {
 	gair := &GetAddrInfoReply{interfaceIndex, C.GoString(hostName), C.GoString(ip), ttl}
-	fn := (*(*func(*GetAddrInfoReply))(unsafe.Pointer(&contextpt)))
+	fn := restoreCallback(uintptr(contextpt)).(func(*GetAddrInfoReply))
 	fn(gair)
 }
 
@@ -296,7 +329,8 @@ func GetAddrInfo(flags C.DNSServiceFlags, interfaceIndex uint32, protocol C.DNSS
 	var fn = func(getAddrInfoReply *GetAddrInfoReply) {
 		c <- getAddrInfoReply
 	}
-	var fnptr = unsafe.Pointer(&fn)
+	callbackIndex := storeCallback(fn)
+	var fnptr = unsafe.Pointer(callbackIndex)
 
 	var ref C.DNSServiceRef
 	chostName := C.CString(hostName)
@@ -309,11 +343,11 @@ func GetAddrInfo(flags C.DNSServiceFlags, interfaceIndex uint32, protocol C.DNSS
 		(C.uint32_t)(interfaceIndex),
 		protocol,
 		chostName,
-		(*(*unsafe.Pointer)(fnptr)),
+		fnptr,
 	)
 
 	if cerr == DNSServiceErr_NoError {
-		return &Context{&ref, reflect.ValueOf(c)}, nil
+		return &Context{&ref, reflect.ValueOf(c), callbackIndex}, nil
 	}
 
 	return nil, createErr(cerr)
